@@ -1,53 +1,68 @@
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_render.h>
-#include <SDL2/SDL_video.h>
+#include <stdlib.h>
 
-bool HandleEvent(SDL_Event *Event) {
+static SDL_Texture *gp_texture;
+static void *gp_pixels;
+static int g_texture_width;
 
-	bool ShouldQuit = false;
+static void SDLResizeTexture(SDL_Renderer *renderer, int width, int height) {
+	if (gp_pixels) { free(gp_pixels); }
+	if (gp_texture) { SDL_DestroyTexture(gp_texture); }
 
-	switch(Event->type)	{
+	gp_texture = SDL_CreateTexture(renderer,
+							 SDL_PIXELFORMAT_ARGB8888,
+							 SDL_TEXTUREACCESS_STREAMING,
+							 width,
+							 height);
 
+	g_texture_width = width;
+	gp_pixels = malloc(width * height * 4);
+}
+
+static void SDLUpdateWindow(SDL_Window *window, SDL_Renderer *renderer) {
+	SDL_UpdateTexture(gp_texture,
+				   0,
+				   gp_pixels,
+				   g_texture_width * 4);
+
+	SDL_RenderCopy(renderer,
+				gp_texture,
+				0,
+				0);
+
+	SDL_RenderPresent(renderer);
+}
+
+bool HandleEvent(SDL_Event *event) {
+	bool should_quit = false;
+
+	switch(event->type)	{
 		case SDL_QUIT: {
-
 			printf("SDL_QUIT\n");
-			ShouldQuit = true;
-
+			should_quit = true;
 		} break;
 
 		case SDL_WINDOWEVENT: {
+			switch(event->window.event) {
+				case SDL_WINDOWEVENT_SIZE_CHANGED: {
+					SDL_Window *window = SDL_GetWindowFromID(event->window.windowID);
+					SDL_Renderer *renderer = SDL_GetRenderer(window);
 
-			switch(Event->window.event) {
+					printf("SDL_WINDOWEVENT_SIZE_CHANGED (%d, %d)\n", event->window.data1, event->window.data2);
 
-				case SDL_WINDOWEVENT_RESIZED: {
-					
-					printf("SDL_WINDOWEVENT_RESIZED (%d, %d)\n", Event->window.data1, Event->window.data2);
-
+					SDLResizeTexture(renderer, event->window.data1, event->window.data2);
 				} break;
 
 				case SDL_WINDOWEVENT_EXPOSED: {
+					SDL_Window *window = SDL_GetWindowFromID(event->window.windowID);
+					SDL_Renderer *renderer = SDL_GetRenderer(window);
 
-					SDL_Window *Window = SDL_GetWindowFromID(Event->window.windowID);
-					SDL_Renderer *Renderer = SDL_GetRenderer(Window);
-
-					static bool IsWhite = true;
-					
-					if (IsWhite == true) {
-						SDL_SetRenderDrawColor(Renderer, 255, 255, 255, 255);
-						IsWhite = false;
-					} else {
-						SDL_SetRenderDrawColor(Renderer, 0, 0, 0, 255);
-						IsWhite = true;
-					}
-
-					SDL_RenderClear(Renderer);
-					SDL_RenderPresent(Renderer);
+					SDLUpdateWindow(window, renderer);
 				} break;
 			}
 		} break;
 	}
-
-	return(ShouldQuit);
+	return(should_quit);
 }
 
 int main(int argc, char *argv[]) {
@@ -57,28 +72,23 @@ int main(int argc, char *argv[]) {
 						  "This is Handmade Hero",
 						  0);
 
-	if (SDL_Init(SDL_INIT_VIDEO) != 0) {
-		//TODO: SDL_Init didn't work!
-	}
+	// Create a Window
+	SDL_Window *window = SDL_CreateWindow("Handmade Hero",
+									   SDL_WINDOWPOS_UNDEFINED,
+									   SDL_WINDOWPOS_UNDEFINED,
+									   640,
+									   480,
+									   SDL_WINDOW_RESIZABLE);
 
-	SDL_Window *Window = SDL_CreateWindow("Handmade Hero",
-						   SDL_WINDOWPOS_UNDEFINED,
-						   SDL_WINDOWPOS_UNDEFINED,
-						   640,
-						   480,
-						   SDL_WINDOW_RESIZABLE);
+	if (window) {
+		// Create a Renderer for the Window
+		SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, 0);
 
-	if (Window) {
-
-		SDL_Renderer *Renderer = SDL_CreateRenderer(Window, -1, 0);
-
-		if (Renderer) {
+		if (renderer) {
 			while(true) {
-				SDL_Event Event;
-				SDL_WaitEvent(&Event);
-				if (HandleEvent(&Event)) {
-					break;
-				}
+				SDL_Event event;
+				SDL_WaitEvent(&event);
+				if (HandleEvent(&event)) { break; }
 			}
 		}
 	}
