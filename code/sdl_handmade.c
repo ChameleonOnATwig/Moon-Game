@@ -1,12 +1,19 @@
 #include <SDL2/SDL.h>
-#include <stdlib.h>
+#include <SDL2/SDL_video.h>
+#include <stdbool.h>
+#include <sys/mman.h>
 
 static SDL_Texture *gp_texture;
-static void *gp_pixels;
-static int g_texture_width;
+static void *gp_bitmap_memory;
+static int g_bitmap_width;
+static int g_bitmap_height;
+static int g_bytes_per_pixel = 4;
 
 static void SDLResizeTexture(SDL_Renderer *renderer, int width, int height) {
-	if (gp_pixels) { free(gp_pixels); }
+	if (gp_bitmap_memory) {
+		munmap(gp_bitmap_memory,
+		 g_bitmap_width * g_bitmap_height * g_bytes_per_pixel);
+	}
 	if (gp_texture) { SDL_DestroyTexture(gp_texture); }
 
 	gp_texture = SDL_CreateTexture(renderer,
@@ -15,15 +22,21 @@ static void SDLResizeTexture(SDL_Renderer *renderer, int width, int height) {
 							 width,
 							 height);
 
-	g_texture_width = width;
-	gp_pixels = malloc(width * height * 4);
+	g_bitmap_width = width;
+	g_bitmap_height = height;
+	gp_bitmap_memory = mmap(0,
+						 width * height * g_bytes_per_pixel,
+						 PROT_READ | PROT_WRITE,
+						 MAP_ANONYMOUS | MAP_PRIVATE,
+						 -1,
+						 0);
 }
 
 static void SDLUpdateWindow(SDL_Window *window, SDL_Renderer *renderer) {
 	SDL_UpdateTexture(gp_texture,
 				   0,
-				   gp_pixels,
-				   g_texture_width * 4);
+				   gp_bitmap_memory,
+				   g_bitmap_width * g_bytes_per_pixel);
 
 	SDL_RenderCopy(renderer,
 				gp_texture,
@@ -85,15 +98,23 @@ int main(int argc, char *argv[]) {
 		SDL_Renderer *renderer = SDL_CreateRenderer(window, -1, 0);
 
 		if (renderer) {
-			while(true) {
+			int width, height;
+			SDL_GetWindowSize(window, &width, &height);
+			SDLResizeTexture(renderer, width, height);
+
+			bool game_running = true;
+			while(game_running) {
 				SDL_Event event;
-				SDL_WaitEvent(&event);
-				if (HandleEvent(&event)) { break; }
+				while(SDL_PollEvent(&event)) {
+					if (HandleEvent(&event)) {
+						game_running = false;
+					}
+				}
+				SDLUpdateWindow(window, renderer);
 			}
 		}
 	}
 
 	SDL_Quit();
-
 	return 0;
 }
