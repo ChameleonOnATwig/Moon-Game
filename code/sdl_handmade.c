@@ -1,5 +1,7 @@
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_video.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <sys/mman.h>
 
 #ifndef MAP_ANONYMOUS
@@ -104,6 +106,10 @@ bool HandleEvent(SDL_Event *p_event) {
 									 p_event->window.data2);
 				} break;
 
+				case SDL_WINDOWEVENT_FOCUS_GAINED: {
+					printf("SDL_WINDOWEVENT_FOCUS_GAINED\n");
+				} break;
+
 				case SDL_WINDOWEVENT_EXPOSED: {
 					SDL_Window *p_window = SDL_GetWindowFromID(p_event->window.windowID);
 					SDL_Renderer *p_renderer = SDL_GetRenderer(p_window);
@@ -137,9 +143,11 @@ int main(int argc, char *argv[]) {
 		SDL_Renderer *p_renderer = SDL_CreateRenderer(p_window, -1, 0);
 
 		if (p_renderer) {
-			int width, height;
-			SDLGetWindowDimension(p_window);
-			SDLResizeTexture(&g_backbuffer, p_renderer, width, height);
+			struct SDL_Window_Dimension dimension = SDLGetWindowDimension(p_window);
+			SDLResizeTexture(&g_backbuffer,
+							 p_renderer,
+							 dimension.width,
+							 dimension.height);
 
 			bool game_running = true;
 			while(game_running) {
