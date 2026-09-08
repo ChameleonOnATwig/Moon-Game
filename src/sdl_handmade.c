@@ -131,6 +131,72 @@ internal void SDLUpdateWindow(SDL_Window *p_window,
 	SDL_RenderPresent(p_renderer);
 }
 
+internal void SDLOpenGameControllers() {
+	int max_joysticks = SDL_NumJoysticks();
+	int controller_index = 0;
+
+	for (int joystick_index = 0; joystick_index < max_joysticks; ++joystick_index) {
+		if (!SDL_IsGameController(joystick_index)) {
+			continue;
+		}
+		if (controller_index >= MAX_CONTROLLERS) {
+			break;
+		}
+
+		g_controller_handles[controller_index] = SDL_GameControllerOpen(joystick_index);
+		g_rumble_handles[controller_index] = SDL_HapticOpen(joystick_index);
+
+		if (g_rumble_handles[controller_index]
+			&& SDL_HapticRumbleInit(g_rumble_handles[controller_index]) != 0) {
+
+			SDL_HapticClose(g_rumble_handles[controller_index]);
+			g_rumble_handles[controller_index] = 0;
+		}
+
+		++controller_index;
+	}
+}
+
+internal void SDLCloseGameControllers() {
+	for (int controller_index = 0; controller_index < MAX_CONTROLLERS; ++controller_index) {
+		if (g_controller_handles[controller_index]) {
+			if (g_rumble_handles[controller_index]) {
+				SDL_HapticClose(g_rumble_handles[controller_index]);
+			}
+
+			SDL_GameControllerClose(g_controller_handles[controller_index]);
+		}
+	}
+}
+
+internal void SDLAudioCallback(void *p_user_data, Uint8 *p_audio_data, int length) {
+	// Clear Audio Buffer to Silence
+	memset(p_audio_data, 0, length);
+}
+
+internal void SDLInitAudio(int32 samples_per_second, int32 buffer_size) {
+	SDL_AudioSpec audio_settings = {0};
+
+	audio_settings.freq = samples_per_second;
+	audio_settings.format = AUDIO_S16LSB;
+	audio_settings.channels = 2;
+	audio_settings.samples = buffer_size;
+	audio_settings.callback = &SDLAudioCallback;
+
+	SDL_OpenAudio(&audio_settings, 0);
+
+	printf("Initialised an Audio device at frequency %d Hz, %d Channels\n",
+		audio_settings.freq, audio_settings.channels);
+
+	if (audio_settings.format != AUDIO_S16LSB) {
+		printf("Oops! We didn't get AUDIO_S16LSB as our sample format!\n");
+		SDL_CloseAudio();
+	}
+
+	// Audio is Paused by Default, so this Unpauses it
+	SDL_PauseAudio(0);
+}
+
 bool HandleEvent(SDL_Event *p_event) {
 	bool should_quit = false;
 
@@ -220,44 +286,6 @@ bool HandleEvent(SDL_Event *p_event) {
 	return should_quit;
 }
 
-internal void SDLOpenGameControllers() {
-	int max_joysticks = SDL_NumJoysticks();
-	int controller_index = 0;
-
-	for (int joystick_index = 0; joystick_index < max_joysticks; ++joystick_index) {
-		if (!SDL_IsGameController(joystick_index)) {
-			continue;
-		}
-		if (controller_index >= MAX_CONTROLLERS) {
-			break;
-		}
-
-		g_controller_handles[controller_index] = SDL_GameControllerOpen(joystick_index);
-		g_rumble_handles[controller_index] = SDL_HapticOpen(joystick_index);
-
-		if (g_rumble_handles[controller_index]
-			&& SDL_HapticRumbleInit(g_rumble_handles[controller_index]) != 0) {
-
-			SDL_HapticClose(g_rumble_handles[controller_index]);
-            g_rumble_handles[controller_index] = 0;
-		}
-
-		++controller_index;
-	}
-}
-
-internal void SDLCloseGameControllers() {
-	for (int controller_index = 0; controller_index < MAX_CONTROLLERS; ++controller_index) {
-		if (g_controller_handles[controller_index]) {
-			if (g_rumble_handles[controller_index]) {
-                SDL_HapticClose(g_rumble_handles[controller_index]);
-			}
-
-			SDL_GameControllerClose(g_controller_handles[controller_index]);
-		}
-	}
-}
-
 int main(int argc, char *argv[]) {
 
 	// Makes a Simple Text Message Box that Waits until Ok is Pressed
@@ -266,8 +294,16 @@ int main(int argc, char *argv[]) {
 							 "This is Handmade Hero",
 							 0);
 
-	SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_HAPTIC);
+	SDL_Init(SDL_INIT_VIDEO
+			| SDL_INIT_GAMECONTROLLER
+			| SDL_INIT_HAPTIC
+			| SDL_INIT_AUDIO);
+
+	// Open Game Controllers
 	SDLOpenGameControllers();
+
+    // Open the Audio Device
+    SDLInitAudio(48000, 4096);
 
 	// Create a Window
 	SDL_Window *p_window = SDL_CreateWindow("Handmade Hero",
@@ -331,6 +367,7 @@ int main(int argc, char *argv[]) {
 	}
 
     SDLCloseGameControllers();
+	SDL_CloseAudio();
 	SDL_Quit();
 	return 0;
 }
