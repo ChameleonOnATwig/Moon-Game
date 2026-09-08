@@ -4,6 +4,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <sys/mman.h>
+#include <x86intrin.h>
 
 
 #define internal static
@@ -19,6 +20,9 @@ typedef uint8_t uint8;
 typedef uint16_t uint16;
 typedef uint32_t uint32;
 typedef uint64_t uint64;
+
+typedef float real32;
+typedef double real64;
 
 
 // MAP_ANONYMOUS is not defined on MAC OS X and some UNIX systems.
@@ -299,6 +303,8 @@ int main(int argc, char *argv[]) {
 			| SDL_INIT_HAPTIC
 			| SDL_INIT_AUDIO);
 
+	uint64 perf_count_freq = SDL_GetPerformanceFrequency();
+
 	// Open Game Controllers
 	SDLOpenGameControllers();
 
@@ -324,6 +330,9 @@ int main(int argc, char *argv[]) {
 							 p_renderer,
 							 dimension.width,
 							 dimension.height);
+
+			uint64 last_counter = SDL_GetPerformanceCounter();
+			uint64 last_cycle_counter = _rdtsc();
 
 			bool game_running = true;
 			while (game_running) {
@@ -362,6 +371,21 @@ int main(int argc, char *argv[]) {
 
 				RenderWeirdGradient(&g_backbuffer, g_x_offset, g_y_offset);
 				SDLUpdateWindow(p_window, p_renderer, &g_backbuffer);
+
+				uint64 end_counter = SDL_GetPerformanceCounter();
+				uint64 counter_elapsed = end_counter - last_counter;
+
+				uint64 end_cycle_counter = _rdtsc();
+				uint64 cycles_elapsed = end_cycle_counter - last_cycle_counter;
+
+				real64 ms_per_frame = (((1000.0f * (real64)counter_elapsed) / (real64)perf_count_freq));
+				real64 fps = (real64)perf_count_freq / (real64)counter_elapsed;
+				real64 mcpf = ((real64)cycles_elapsed / (1000.0f * 1000.0f));
+
+                printf("%.02fms/f, %.02ff/s, %.02fmc/f\n", ms_per_frame, fps, mcpf);
+
+				last_counter = end_counter;
+				last_cycle_counter = end_cycle_counter;
 			}
 		}
 	}
